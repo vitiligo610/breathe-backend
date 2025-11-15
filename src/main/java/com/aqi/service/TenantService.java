@@ -6,8 +6,7 @@ import com.aqi.exception.ResourceNotFoundException;
 import com.aqi.repository.TenantRepository;
 import com.aqi.security.TenantAuthentication;
 import lombok.RequiredArgsConstructor;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,8 +15,8 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class TenantService {
-    private static final Logger logger = LoggerFactory.getLogger(TenantService.class);
     private final TenantRepository tenantRepository;
 
     public TenantDto getCurrentTenant() {
@@ -41,7 +40,7 @@ public class TenantService {
 
         tenantRepository.save(tenant);
 
-        logger.info("Tenant '{}' created successfully with ID: {}", tenantName, tenant.getId());
+        log.info("Tenant '{}' created successfully with ID: {}", tenantName, tenant.getId());
 
         return secretToken;
     }

@@ -6,15 +6,34 @@ import com.aqi.entity.SensorReading;
 import com.aqi.exception.ResourceNotFoundException;
 import com.aqi.repository.SensorNodeRepository;
 import com.aqi.repository.SensorReadingRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.io.IOException;
+import java.time.Instant;
 
 @Service
 @RequiredArgsConstructor
 public class SensorReadingService {
     private final SensorReadingRepository readingRepository;
     private final SensorNodeRepository sensorNodeRepository;
+    private final ObjectMapper objectMapper;
+
+    @Transactional
+    public SensorReading processAndSaveReading(String jsonPayload) {
+        SensorDataDto sensorData;
+
+        try {
+            sensorData = objectMapper.readValue(jsonPayload, SensorDataDto.class);
+            sensorData.setTimestamp(Instant.now());
+        } catch (IOException e) {
+            throw new IllegalArgumentException("Invalid JSON format received from sensor: " + jsonPayload, e);
+        }
+
+        return saveReading(sensorData);
+    }
 
     @Transactional
     public SensorReading saveReading(SensorDataDto sensorData) {

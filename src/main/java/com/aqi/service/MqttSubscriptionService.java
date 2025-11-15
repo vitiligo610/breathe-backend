@@ -4,24 +4,24 @@ import com.hivemq.client.mqtt.datatypes.MqttQos;
 import com.hivemq.client.mqtt.mqtt3.Mqtt3AsyncClient;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class MqttSubscriptionService {
-    private static final Logger logger = LoggerFactory.getLogger(MqttSubscriptionService.class);
     private final Mqtt3AsyncClient mqttClient;
+    private final SensorReadingService sensorReadingService;
 
     @PostConstruct
     public void startMqttClient() {
         mqttClient.connect()
             .whenComplete((connAck, throwable) -> {
                 if (throwable != null) {
-                    logger.error("Failed to connect to MQTT Broker: {}", throwable.getMessage());
+                    log.error("Failed to connect to MQTT Broker: {}", throwable.getMessage());
                 } else {
-                    logger.info("Successfully connected to MQTT Broker.");
+                    log.info("Successfully connected to MQTT Broker.");
                     subscribeToTopics();
                 }
             });
@@ -37,14 +37,15 @@ public class MqttSubscriptionService {
                 String topic = publish.getTopic().toString();
                 String payload = new String(publish.getPayloadAsBytes(), java.nio.charset.StandardCharsets.UTF_8);
 
-                logger.info("Message received on [{}]: {}", topic, payload);
+                log.info("Message received on [{}]: {}", topic, payload);
+                sensorReadingService.processAndSaveReading(payload);
             })
             .send()
             .whenComplete((subAck, throwable) -> {
                 if (throwable != null) {
-                    logger.error("Failed to subscribe to topic " + topicFilter + ": {}", throwable.getMessage());
+                    log.error("Failed to subscribe to topic " + topicFilter + ": {}", throwable.getMessage());
                 } else {
-                    logger.info("Successfully subscribed to topic: {}", topicFilter);
+                    log.info("Successfully subscribed to topic: {}", topicFilter);
                 }
             });
     }

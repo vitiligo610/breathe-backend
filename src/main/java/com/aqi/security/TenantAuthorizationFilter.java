@@ -6,6 +6,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
@@ -15,6 +16,7 @@ import java.io.IOException;
 
 @Component
 @RequiredArgsConstructor
+@Slf4j
 public class TenantAuthorizationFilter extends OncePerRequestFilter {
     private final TenantRepository tenantRepository;
 
@@ -41,7 +43,7 @@ public class TenantAuthorizationFilter extends OncePerRequestFilter {
                 try {
                     response.getWriter().write("Invalid tenant secret token.");
                 } catch (IOException e) {
-                    logger.error("Could not write response", e);
+                    log.error("Could not write response", e);
                 }
             });
         }
