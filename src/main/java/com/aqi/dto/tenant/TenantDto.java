@@ -1,4 +1,4 @@
-package com.aqi.dto.user;
+package com.aqi.dto.tenant;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -7,10 +7,7 @@ import lombok.NoArgsConstructor;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class UserDto {
+public class TenantDto {
     private Long id;
-    private String email;
-    private Double latitude;
-    private Double longitude;
+    private String name;
 }
-

@@ -6,22 +6,18 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 @Entity
-@Table(name = "users")
+@Table(name = "tenants")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class User {
+public class Tenant {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(unique = true, nullable = false)
-    private String email;
-
     @Column(nullable = false)
-    private String password;
+    private String name;
 
-    private Double latitude;
-    private Double longitude;
+    @Column(nullable = false, unique = true)
+    private String secretToken;
 }
-

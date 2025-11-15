@@ -1,65 +1,223 @@
-# 🌐 Intelligent AQI Monitoring System – Backend
+# Secure Mosquitto Broker Setup (mTLS)
 
-This is the backend service for the Intelligent Air Quality Index Monitoring and Notification System. Built with **Spring Boot**, it connects to external AQI APIs, manages user accounts, sends Gmail alerts, and provides real-time air quality data for Pakistani cities.
-
----
-
-## ⚙️ Features
-
-- **User Authentication & Management**  
-  JWT-based login, registration, and profile updates.
-
-- **AQI Data Integration**  
-  Fetches real-time AQI from external APIs and stores it in PostgreSQL.
-
-- **Location-Based Alerts**  
-  Sends Gmail notifications when air quality becomes unsafe in a user’s location.
-
-- **Scheduled Polling**  
-  Periodically checks AQI levels and triggers alerts using Spring Scheduler.
-
-- **Chatbot Integration (Planned)**  
-  Offers health advice based on AQI and user preferences.
+This document provides instructions for setting up Mosquitto via Docker with **Mutual TLS (mTLS)** encryption and certificate-based authentication for sensor nodes, while reserving password-based access for the Spring backend.
 
 ---
 
-## 🧱 Tech Stack
+## 1. Prerequisites
 
-- **Framework**: Spring Boot
-- **Database**: PostgreSQL (Dockerized)
-- **Security**: Spring Security + JWT
-- **Notifications**: Gmail API (SMTP or OAuth2)
-- **External API**: AQI data provider for Pakistan
-- **Build Tool**: Maven
+* **Docker** and **Docker Compose** installed.
+* **OpenSSL** installed for certificate generation.
 
 ---
 
-## 🚀 Getting Started
+## 2. Directory Structure
 
-### Prerequisites
-
-- Java 17+
-- Docker
-- PostgreSQL client (optional)
-- Maven
-
-### Setup PostgreSQL with Docker
-
-```bash
-docker run --name postgres-airpulse \
-  -e POSTGRES_PASSWORD=postgres \
-  -e POSTGRES_DB=airpulse_db \
-  -p 5432:5432 -d postgres:latest
+Create the following directory structure to manage configuration files and certificates:
 
 ```
+mosquitto-setup/
+├── ca-certificates
+│   ├── ca.crt
+│   └── ca.key
+├── certs
+│   ├── server.crt
+│   └── server.key
+├── config
+│   ├── mosquitto_acl.conf
+│   └── mosquitto.conf
+└── docker-compose.yml
 
+````
 
-## 📊 API Endpoints
+---
 
-| Method | Endpoint              | Description                     |
-|--------|-----------------------|---------------------------------|
-| GET    | `/api/aqi`            | Fetch AQI data by location      |
-| POST   | `/api/auth/register` | Register a new user             |
-| POST   | `/api/auth/login`    | Authenticate user               |
-| PUT    | `/api/user/location` | Update user location            |
-| GET    | `/api/user/alerts`   | Get AQI alerts for user         |
+## 3. Certificate Generation (CA & Broker)
+
+This process establishes the root of trust (`ca.crt`) and the broker's identity (`server.crt`).
+
+### 3.1. Create CA (Root of Trust)
+
+Generate the Certificate Authority (CA) key and certificate.
+
+```bash
+# Generate CA Private Key (ca.key) and Certificate (ca.crt)
+openssl req -new -x509 -days 365 -extensions v3_ca -keyout ca_certificates/ca.key -out ca_certificates/ca.crt -subj "/CN=MyRootCA"
+````
+
+### 3.2. Create Broker Certificates
+
+Generate the Broker's key pair, CSR, and sign it with the CA.
+
+```bash
+# 1. Generate Broker Private Key
+openssl genrsa -out certs/server.key 2048
+
+# 2. Generate Broker CSR
+# IMPORTANT: Use the Broker's HOSTNAME or IP as the Common Name (CN)
+openssl req -new -out certs/server.csr -key certs/server.key -subj "/CN=localhost"
+
+# 3. Sign the Broker Certificate with the CA
+openssl x509 -req -in certs/server.csr -CA ca_certificates/ca.crt -CAkey ca_certificates/ca.key -CAcreateserial -out certs/server.crt -days 365
+```
+
+-----
+
+## 4. Mosquitto Configuration Files
+
+Place these files in the `./config/` directory.
+
+### 4.1. `mosquitto.conf`
+
+```conf
+# Mosquitto Configuration (./config/mosquitto.conf)
+
+# General Settings
+persistence true
+persistence_location /mosquitto/data/
+log_dest stdout
+
+# Listener for Secure Connections (MQTTS)
+listener 8883
+protocol mqtt
+cafile /mosquitto/config/ca_certificates/ca.crt
+certfile /mosquitto/config/certs/server.crt
+keyfile /mosquitto/config/certs/server.key
+acl_file /mosquitto/config/mosquitto_acl.conf
+
+# Security Settings
+allow_anonymous false
+require_certificate true # Enforce mTLS for all connections
+use_identity_as_username true # Use certificate CN as username (for all clients)
+```
+
+### 4.2. `mosquitto_acl.conf`
+
+```conf
+# Mosquitto ACL Configuration (./config/mosquitto_acl.conf)
+
+# 1. Spring Backend User (Uses mTLS/Certificate CN as username)
+user spring_backend_user
+topic readwrite #
+
+# 2. Sensor Node 1 (Uses mTLS/Certificate CN as username)
+user sensor_node_1
+topic write sensors/sensor_node_1/# 
+```
+
+-----
+
+## 5. Docker Setup and Execution
+
+### 5.1. `docker-compose.yml`
+
+```yaml
+version: '3.7'
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2.0.18
+    container_name: mosquitto-secure
+    ports:
+      - "8883:8883"
+    volumes:
+      - ./config/mosquitto.conf:/mosquitto/config/mosquitto.conf
+      - ./config/mosquitto_acl.conf:/mosquitto/config/mosquitto_acl.conf
+      - ./ca_certificates/ca.crt:/mosquitto/config/ca_certificates/ca.crt
+      - ./certs/server.crt:/mosquitto/config/certs/server.crt
+      - ./certs/server.key:/mosquitto/config/certs/server.key
+    restart: always
+```
+
+### 5.2. Start the Broker
+
+```bash
+docker-compose up -d
+```
+
+-----
+
+## 6. Client Certificate Generation (Backend & Sensor)
+
+### 6.1. Spring Backend Client Certificate
+
+**CN MUST be:** `spring_backend_user`.
+
+```bash
+# 1. Generate Key
+openssl genrsa -out certs/backend_user.key 2048
+# 2. Generate CSR (CN must match ACL entry 'spring_backend_user')
+openssl req -new -out certs/backend_user.csr -key certs/backend_user.key -subj "/CN=spring_backend_user"
+# 3. Sign with CA
+openssl x509 -req -in certs/backend_user.csr -CA ca_certificates/ca.crt -CAkey ca_certificates/ca.key -CAcreateserial -out certs/backend_user.crt -days 365
+```
+
+### 6.2. Sensor Node Client Certificate
+
+Use the **UUID** generated by your Spring Shell command as the **CN**.
+
+```bash
+# Replace <UUID> with the output from your 'add-sensor' shell command
+UUID="<YOUR_GENERATED_UUID_HERE>" 
+
+# 1. Generate Key
+openssl genrsa -out certs/${UUID}.key 2048
+# 2. Generate CSR (CN must match the UUID)
+openssl req -new -out certs/${UUID}.csr -key certs/${UUID}.key -subj "/CN=${UUID}"
+# 3. Sign with CA
+openssl x509 -req -in certs/${UUID}.csr -CA ca_certificates/ca.crt -CAkey ca_certificates/ca.key -CAcreateserial -out certs/${UUID}.crt -days 365
+
+# --- MANUAL ACL UPDATE REQUIRED ---
+echo "user ${UUID}" >> config/mosquitto_acl.conf
+echo "topic write sensors/${UUID}/#" >> config/mosquitto_acl.conf
+# Restart Mosquitto container after updating ACL file.
+docker restart mosquitto-secure
+```
+
+-----
+
+## 7. Spring Backend Trust & Key Stores
+
+Create the PKCS12 files needed for Java's `KeyManagerFactory` and `TrustManagerFactory`.
+
+### 7.1. Create Key Store (Client Identity)
+
+Bundles the Spring Backend's key and certificate.
+
+```bash
+# Input: backend_user.crt, backend_user.key
+# Output: client-keystore.p12
+openssl pkcs12 -export -in certs/backend_user.crt -inkey certs/backend_user.key \
+    -name "backend-client" -out client-keystore.p12 -passout pass:<key-store-password>
+```
+
+### 7.2. Create Trust Store (Broker Trust)
+
+Bundles the CA certificate to verify the broker's identity.
+
+```bash
+# Input: ca.crt
+# Output: truststore.p12
+keytool -import -trustcacerts -alias ca-root -file ca_certificates/ca.crt \
+    -keystore truststore.p12 -storepass <trust-store-passwrod> -noprompt
+```
+
+-----
+
+## 8. Environment Variables
+
+### 8.1. `env.properties`
+
+**Create this file** by copying `env.example.properties` and updating paths/passwords. This file should be loaded by your Spring Boot application.
+
+```properties
+DB_URL=postgresql://localhost:5432/aqi_db
+DB_USER=postgres
+DB_PASSWORD=password
+
+MQTT_HOST=localhost
+MQTT_PORT=8883
+MQTT_KEY_STORE_PATH=/path/to/client-keystore.p12
+MQTT_KEY_STORE_PASSWORD=<key-store-password>
+MQTT_TRUST_STORE_PATH=file:/path/to/truststore.p12
+MQTT_TRUST_STORE_PASSWORD=<trust-store-password>
+```
