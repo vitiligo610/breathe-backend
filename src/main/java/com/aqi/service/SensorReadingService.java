@@ -8,6 +8,8 @@ import com.aqi.repository.SensorNodeRepository;
 import com.aqi.repository.SensorReadingRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,7 +19,7 @@ import java.time.Instant;
 @Service
 @RequiredArgsConstructor
 public class SensorReadingService {
-    private final SensorReadingRepository readingRepository;
+    private final SensorReadingRepository sensorReadingRepository;
     private final SensorNodeRepository sensorNodeRepository;
     private final ObjectMapper objectMapper;
 
@@ -52,6 +54,34 @@ public class SensorReadingService {
                 .dustUgm3(sensorData.getDust_ugm3())
                 .build();
 
-        return readingRepository.save(reading);
+        return sensorReadingRepository.save(reading);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<SensorDataDto> getSensorReadings(String id, Instant start, Instant end, Pageable pageable) {
+        SensorNode sensorNode = sensorNodeRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("SensorNode not found with id: " + id));
+
+        Page<SensorReading> readingsPage;
+        if (start != null && end != null) {
+            readingsPage = sensorReadingRepository.findBySensorNodeAndTimestampBetween(sensorNode, start, end, pageable);
+        } else {
+            readingsPage = sensorReadingRepository.findBySensorNode(sensorNode, pageable);
+        }
+
+        return readingsPage.map(this::convertToDto);
+    }
+
+    private SensorDataDto convertToDto(SensorReading entity) {
+        return new SensorDataDto(
+                entity.getSensorNode().getId(),
+                entity.getTimestamp(),
+                entity.getTemperature(),
+                entity.getHumidity(),
+                entity.getMq4Ch4(),
+                entity.getMq7Co(),
+                entity.getMq135Air(),
+                entity.getDustUgm3()
+        );
     }
 }

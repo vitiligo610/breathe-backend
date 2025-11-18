@@ -15,9 +15,9 @@ public class SensorDataDto {
     private String node_id;
     private Instant timestamp;
     private double temperature;
-    private int humidity;
-    private int mq4_ch4;
-    private int mq7_co;
-    private int mq135_air;
+    private double humidity;
+    private double mq4_ch4;
+    private double mq7_co;
+    private double mq135_air;
     private double dust_ugm3;
 }

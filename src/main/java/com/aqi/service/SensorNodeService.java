@@ -3,7 +3,11 @@ package com.aqi.service;
 import com.aqi.entity.SensorNode;
 import com.aqi.exception.ResourceNotFoundException;
 import com.aqi.repository.SensorNodeRepository;
+import com.aqi.repository.specification.SensorNodeSpecification;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,5 +35,14 @@ public class SensorNodeService {
         } else {
             throw new ResourceNotFoundException("Sensor node with id " + id + " not found.");
         }
+    }
+
+    @Transactional(readOnly = true)
+    public Page<SensorNode> getNodes(String name, String location, Boolean active, Pageable pageable) {
+        Specification<SensorNode> spec = SensorNodeSpecification.findByCriteria(
+                name, location, active
+        );
+
+        return sensorNodeRepository.findAll(spec, pageable);
     }
 }

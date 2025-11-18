@@ -19,6 +19,7 @@ import java.util.UUID;
 public class TenantService {
     private final TenantRepository tenantRepository;
 
+    @Transactional(readOnly = true)
     public TenantDto getCurrentTenant() {
         TenantAuthentication authentication = (TenantAuthentication) SecurityContextHolder.getContext().getAuthentication();
         Long tenantId = authentication.getTenantId();

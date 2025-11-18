@@ -29,27 +29,29 @@ public class TenantAuthorizationFilter extends OncePerRequestFilter {
 
         String secretToken = request.getHeader(tenantHeaderName);
 
-        if (secretToken != null && !secretToken.isEmpty()) {
-            tenantRepository.findBySecretToken(secretToken).ifPresentOrElse(tenant -> {
-                TenantAuthentication authentication = new TenantAuthentication(
-                        tenant.getId(),
-                        tenant.getName(),
-                        secretToken
-                );
-
-                SecurityContextHolder.getContext().setAuthentication(authentication);
-            }, () -> {
-                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-                try {
-                    response.getWriter().write("Invalid tenant secret token.");
-                } catch (IOException e) {
-                    log.error("Could not write response", e);
-                }
-            });
+        if (secretToken == null || secretToken.isEmpty()) {
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            response.getWriter().write("Missing tenant secret token.");
+            return;
         }
 
-        if (!response.isCommitted()) {
-            filterChain.doFilter(request, response);
+        var optionalTenant = tenantRepository.findBySecretToken(secretToken);
+
+        if (optionalTenant.isEmpty()) {
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            response.getWriter().write("Invalid tenant secret token.");
+            return;
         }
+
+        var tenant = optionalTenant.get();
+        TenantAuthentication authentication = new TenantAuthentication(
+            tenant.getId(),
+            tenant.getName(),
+            secretToken
+        );
+
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+
+        filterChain.doFilter(request, response);
     }
 }
