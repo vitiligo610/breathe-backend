@@ -1,6 +1,6 @@
 package com.aqi.util;
 
-import com.aqi.dto.aqi.AqiResult;
+import com.aqi.dto.aqi.AqiData;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -28,9 +28,9 @@ public class AqiCalculator {
      * Main entry point to calculate AQI.
      * @param pollutants Map of pollutant names to values in µg/m3 (OWM default).
      * Keys: "co", "no", "no2", "o3", "so2", "pm2_5", "pm10", "nh3"
-     * @return AqiResult containing the max AQI, category, and dominant pollutant.
+     * @return containing the max AQI, category, and dominant pollutant.
      */
-    public AqiResult calculateAqi(Map<String, Double> pollutants) {
+    public AqiData calculateAqi(Map<String, Double> pollutants) {
         int maxAqi = 0;
         String dominantPollutant = "Unknown";
 
@@ -77,7 +77,11 @@ public class AqiCalculator {
 
         AqiCategory category = getAqiCategory(maxAqi);
 
-        return new AqiResult(maxAqi, category, dominantPollutant);
+        return AqiData.builder()
+                .aqiUs(maxAqi)
+                .category(category)
+                .dominantPollutant(dominantPollutant)
+                .build();
     }
 
     /**

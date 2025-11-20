@@ -1,12 +1,11 @@
 package com.aqi.dto.location;
 
-import com.aqi.dto.aqi.AqiCategory;
+import com.aqi.dto.aqi.AqiData;
+import com.aqi.dto.aqi.WeatherData;
+import com.aqi.dto.sensor.SensorData;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.Builder;
 import lombok.Data;
-
-import java.time.Instant;
-import java.util.Map;
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @Data
@@ -14,21 +13,11 @@ import java.util.Map;
 public class LocationDataDto {
     private String name;
     private String locationId;
-    private double latitude;
-    private double longitude;
-    private Instant timestamp;
+    private Double latitude;
+    private Double longitude;
+    private Long timestamp;
 
-    private Integer aqiUs;
-    private AqiCategory aqiCategory;
-
-    private Double temperatureC;
-    private Double humidityPercent;
-    private Double windSpeedMps;
-    private String weatherDescription;
-
-    private Map<String, Double> pollutants;
-
-    private Double mq4Ch4;
-    private Double mq7Co;
-    private Double dustUgm3;
+    private AqiData aqi;
+    private WeatherData weather;
+    private SensorData sensors;
 }

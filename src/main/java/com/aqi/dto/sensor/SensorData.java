@@ -11,13 +11,13 @@ import java.time.Instant;
 @Getter
 @NoArgsConstructor
 @AllArgsConstructor
-public class SensorDataDto {
+public class SensorData {
     private String node_id;
-    private Instant timestamp;
-    private double temperature;
-    private double humidity;
-    private double mq4_ch4;
-    private double mq7_co;
-    private double mq135_air;
-    private double dust_ugm3;
+    private Long timestamp;
+    private Double temperature;
+    private Double humidity;
+    private Double mq4_ch4;
+    private Double mq7_co;
+    private Double mq135_air;
+    private Double dust_ugm3;
 }

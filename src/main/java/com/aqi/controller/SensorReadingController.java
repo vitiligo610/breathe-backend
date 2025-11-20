@@ -1,6 +1,6 @@
 package com.aqi.controller;
 
-import com.aqi.dto.sensor.SensorDataDto;
+import com.aqi.dto.sensor.SensorData;
 import com.aqi.service.SensorReadingService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -27,7 +27,7 @@ public class SensorReadingController {
      * Example: GET /api/sensors/.../readings?start=2025-11-16T00:00:00Z&end=2025-11-17T00:00:00Z
      */
     @GetMapping("/{id}/readings")
-    public Page<SensorDataDto> getSensorReadings(
+    public Page<SensorData> getSensorReadings(
             @PathVariable String id,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant start,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant end,

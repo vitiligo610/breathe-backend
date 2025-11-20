@@ -15,7 +15,7 @@ public class AqiController {
     private final OpenWeatherMapService openWeatherMapService;
 
     @GetMapping
-    public LocationDataDto getAqi(@RequestParam double lat, @RequestParam double lon) {
+    public LocationDataDto getAqi(@RequestParam Double lat, @RequestParam Double lon) {
         return openWeatherMapService.getExternalLocationData(lat, lon);
     }
 }

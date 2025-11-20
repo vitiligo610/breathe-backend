@@ -1,8 +1,10 @@
 package com.aqi.service;
 
-import com.aqi.dto.aqi.AqiResult;
-import com.aqi.dto.omw.AirPollutionResponse;
+import com.aqi.dto.aqi.AqiData;
+import com.aqi.dto.aqi.WeatherData;
+import com.aqi.dto.aqi.WindData;
 import com.aqi.dto.location.LocationDataDto;
+import com.aqi.dto.omw.AirPollutionResponse;
 import com.aqi.dto.omw.WeatherResponse;
 import com.aqi.exception.ExternalApiException;
 import com.aqi.util.AqiCalculator;
@@ -33,7 +35,7 @@ public class OpenWeatherMapService {
     private static final String OWM_AQI_URL = "https://api.openweathermap.org/data/2.5/air_pollution";
     private static final String OWM_WEATHER_URL = "https://api.openweathermap.org/data/2.5/weather";
 
-    public LocationDataDto getExternalLocationData(double lat, double lon) {
+    public LocationDataDto getExternalLocationData(Double lat, Double lon) {
         log.info("Fetching location data. lat: {}, lon: {}", lat, lon);
 
         AirPollutionResponse aqiResponse = fetchAirPollutionData(lat, lon);
@@ -42,7 +44,7 @@ public class OpenWeatherMapService {
             throw new ExternalApiException("No AQI data found for location.");
         }
 
-        AirPollutionResponse.AirPollutionEntry latestEntry = aqiResponse.getList().get(0);
+        AirPollutionResponse.AirPollutionEntry latestEntry = aqiResponse.getList().getFirst();
 
         AirPollutionResponse.Components components = latestEntry.getComponents();
         if (components == null) {
@@ -51,26 +53,21 @@ public class OpenWeatherMapService {
 
         Map<String, Double> pollutants = extractPollutants(components);
 
-        AqiResult result = aqiCalculator.calculateAqi(pollutants);
+        AqiData aqiData = aqiCalculator.calculateAqi(pollutants);
 
-        WeatherResponse weather = fetchWeatherData(lat, lon);
+        WeatherData weather = fetchWeatherData(lat, lon);
 
         return LocationDataDto.builder()
                 .latitude(lat)
                 .longitude(lon)
-                .timestamp(Instant.ofEpochSecond(latestEntry.getDt()))
-                .aqiUs(result.getAqi())
-                .aqiCategory(result.getCategory())
-                .temperatureC(weather.getMain().getTemp() - 273.15) // K → °C
-                .humidityPercent(Double.valueOf(weather.getMain().getHumidity()))
-                .windSpeedMps(weather.getWind().getSpeed())
-                .weatherDescription(weather.getWeather().get(0).getDescription())
-                .pollutants(pollutants)
+                .timestamp(Instant.now().getEpochSecond())
+                .aqi(aqiData)
+                .weather(weather)
                 .build();
     }
 
-    private AirPollutionResponse fetchAirPollutionData(double lat, double lon) {
-        String url = UriComponentsBuilder.fromHttpUrl(OWM_AQI_URL)
+    private AirPollutionResponse fetchAirPollutionData(Double lat, Double lon) {
+        String url = UriComponentsBuilder.fromUriString(OWM_AQI_URL)
                 .queryParam("lat", lat)
                 .queryParam("lon", lon)
                 .queryParam("appid", apiKey)
@@ -90,8 +87,8 @@ public class OpenWeatherMapService {
         }
     }
 
-    private WeatherResponse fetchWeatherData(double lat, double lon) {
-        String url = UriComponentsBuilder.fromHttpUrl(OWM_WEATHER_URL)
+    private WeatherData fetchWeatherData(double lat, double lon) {
+        String url = UriComponentsBuilder.fromUriString(OWM_WEATHER_URL)
                 .queryParam("lat", lat)
                 .queryParam("lon", lon)
                 .queryParam("appid", apiKey)
@@ -101,7 +98,24 @@ public class OpenWeatherMapService {
 
         try {
             ResponseEntity<WeatherResponse> response = restTemplate.getForEntity(url, WeatherResponse.class);
-            return response.getBody();
+            WeatherResponse body = response.getBody();
+
+            if (body == null) {
+                throw new ExternalApiException("No response body: " + response.getStatusCode());
+            }
+
+            return WeatherData.builder()
+                    .temperatureC(body.getMain().getTemp())
+                    .weatherIcon(body.getWeather().getFirst().getIcon())
+                    .weatherDescription(body.getWeather().getFirst().getDescription())
+                    .humidityPercent(body.getMain().getHumidity())
+                    .wind(
+                            WindData.builder()
+                                    .speedMps(body.getWind().getSpeed())
+                                    .angle(body.getWind().getDeg())
+                                    .build()
+                    )
+                    .build();
         } catch (HttpClientErrorException e) {
             log.error("HTTP error fetching weather data: {}", e.getMessage());
             throw new ExternalApiException("Failed to fetch weather data: " + e.getStatusCode(), e);

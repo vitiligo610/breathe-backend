@@ -39,16 +39,16 @@ public class WeatherResponse {
         private Double feels_like;
         private Double temp_min;
         private Double temp_max;
-        private Integer pressure;
-        private Integer humidity;
-        private Integer sea_level;
-        private Integer grnd_level;
+        private Double pressure;
+        private Double humidity;
+        private Double sea_level;
+        private Double grnd_level;
     }
 
     @Data
     public static class Wind {
         private Double speed;
-        private Integer deg;
+        private Double deg;
         private Double gust;
     }
 

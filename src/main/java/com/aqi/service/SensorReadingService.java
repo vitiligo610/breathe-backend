@@ -1,6 +1,6 @@
 package com.aqi.service;
 
-import com.aqi.dto.sensor.SensorDataDto;
+import com.aqi.dto.sensor.SensorData;
 import com.aqi.entity.SensorNode;
 import com.aqi.entity.SensorReading;
 import com.aqi.exception.ResourceNotFoundException;
@@ -25,11 +25,11 @@ public class SensorReadingService {
 
     @Transactional
     public SensorReading processAndSaveReading(String jsonPayload) {
-        SensorDataDto sensorData;
+        SensorData sensorData;
 
         try {
-            sensorData = objectMapper.readValue(jsonPayload, SensorDataDto.class);
-            sensorData.setTimestamp(Instant.now());
+            sensorData = objectMapper.readValue(jsonPayload, SensorData.class);
+            sensorData.setTimestamp(Instant.now().getEpochSecond());
         } catch (IOException e) {
             throw new IllegalArgumentException("Invalid JSON format received from sensor: " + jsonPayload, e);
         }
@@ -38,7 +38,7 @@ public class SensorReadingService {
     }
 
     @Transactional
-    public SensorReading saveReading(SensorDataDto sensorData) {
+    public SensorReading saveReading(SensorData sensorData) {
         String nodeId = sensorData.getNode_id();
         SensorNode sensorNode = sensorNodeRepository.findById(nodeId)
                 .orElseThrow(() -> new ResourceNotFoundException("SensorNode not found for ID: " + nodeId));
@@ -58,7 +58,7 @@ public class SensorReadingService {
     }
 
     @Transactional(readOnly = true)
-    public Page<SensorDataDto> getSensorReadings(String id, Instant start, Instant end, Pageable pageable) {
+    public Page<SensorData> getSensorReadings(String id, Instant start, Instant end, Pageable pageable) {
         SensorNode sensorNode = sensorNodeRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("SensorNode not found with id: " + id));
 
@@ -72,8 +72,8 @@ public class SensorReadingService {
         return readingsPage.map(this::convertToDto);
     }
 
-    private SensorDataDto convertToDto(SensorReading entity) {
-        return new SensorDataDto(
+    private SensorData convertToDto(SensorReading entity) {
+        return new SensorData(
                 entity.getSensorNode().getId(),
                 entity.getTimestamp(),
                 entity.getTemperature(),

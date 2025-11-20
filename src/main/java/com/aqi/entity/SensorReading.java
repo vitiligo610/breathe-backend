@@ -24,34 +24,35 @@ public class SensorReading {
     @JoinColumn(name = "sensor_id")
     private SensorNode sensorNode;
 
-    private Instant timestamp;
+    @ColumnDefault("EXTRACT(EPOCH FROM NOW())")
+    private Long timestamp;
 
     @ColumnDefault("0")
-    private double temperature = 0;
+    private Double temperature;
 
     @ColumnDefault("0")
-    private double humidity = 0;
+    private Double humidity;
 
     @Column(name = "mq4_ch4")
     @ColumnDefault("0")
-    private double mq4Ch4 = 0;
+    private Double mq4Ch4;
 
     @Column(name = "mq7_co")
     @ColumnDefault("0")
-    private double mq7Co = 0;
+    private Double mq7Co;
 
     @Column(name = "mq135_air")
     @ColumnDefault("0")
-    private double mq135Air = 0;
+    private Double mq135Air;
 
     @Column(name = "dust_ugm3")
     @ColumnDefault("0")
-    private double dustUgm3 = 0;
+    private Double dustUgm3;
 
     @PrePersist
     protected void onCreate() {
         if (timestamp == null) {
-            timestamp = Instant.now();
+            timestamp = Instant.now().getEpochSecond();
         }
     }
 }
