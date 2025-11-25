@@ -5,16 +5,16 @@ import lombok.Data;
 
 @Data
 public class WeatherUnits {
-    private String temperature = "°";
+    private String temperature = AllUnits.TEMPERATURE;
 
     @JsonProperty("weather_code")
-    private String weatherCode = "wmo code";
+    private String weatherCode = AllUnits.WEATHER_CODE;
 
-    private String humidity = "%";
+    private String humidity = AllUnits.HUMIDITY;
 
     @JsonProperty("wind_speed")
-    private String windSpeed = "km/h";
+    private String windSpeed = AllUnits.WIND_SPEED;
 
     @JsonProperty("wind_direction")
-    private String windDirection = "°";
+    private String windDirection = AllUnits.WIND_DIRECTION;
 }

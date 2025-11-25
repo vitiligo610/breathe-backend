@@ -1,5 +1,6 @@
 package com.aqi.dto.location;
 
+import com.aqi.util.ClimateSummaryUnits;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Builder;
 import lombok.Data;
@@ -12,6 +13,9 @@ import java.util.List;
 @Data
 @SuperBuilder
 public class LocationClimateSummaryData extends LocationClimateBaseData {
+
+    @Builder.Default
+    private ClimateSummaryUnits units = new ClimateSummaryUnits();
 
     private CurrentData current;
     private ForecastData forecast;
