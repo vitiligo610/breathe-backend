@@ -169,15 +169,30 @@ public class OpenMeteoMapper {
     }
 
     public LocationAirQualityHistoryData mapToLocationAQHistoryData(AirQualityResponse aqi) {
+        if (aqi == null || aqi.getHourly() == null) return null;
+
+        long currentEpoch = Instant.now().getEpochSecond();
+        long cutoffTime = currentEpoch - (48 * 60 * 60);
+
+        List<Long> allTimes = aqi.getHourly().getTime();
+        int startIndex = 0;
+
+        for (int i = 0; i < allTimes.size(); i++) {
+            if (allTimes.get(i) >= cutoffTime) {
+                startIndex = i;
+                break;
+            }
+        }
+
         var hourly = LocationAirQualityData.Forecast.builder()
-                .time(aqi.getHourly().getTime())
-                .aqi(aqi.getHourly().getUsAqi())
-                .pm2_5(aqi.getHourly().getPm2_5())
-                .pm10(aqi.getHourly().getPm10())
-                .o3(aqi.getHourly().getO3())
-                .co(aqi.getHourly().getCo())
-                .no2(aqi.getHourly().getNo2())
-                .so2(aqi.getHourly().getSo2())
+                .time(sliceList(aqi.getHourly().getTime(), startIndex))
+                .aqi(sliceList(aqi.getHourly().getUsAqi(), startIndex))
+                .pm2_5(sliceList(aqi.getHourly().getPm2_5(), startIndex))
+                .pm10(sliceList(aqi.getHourly().getPm10(), startIndex))
+                .o3(sliceList(aqi.getHourly().getO3(), startIndex))
+                .co(sliceList(aqi.getHourly().getCo(), startIndex))
+                .no2(sliceList(aqi.getHourly().getNo2(), startIndex))
+                .so2(sliceList(aqi.getHourly().getSo2(), startIndex))
                 .build();
 
         int utcOffset = (aqi.getUtcOffsetSeconds() != null) ? aqi.getUtcOffsetSeconds() : 0;
@@ -185,20 +200,20 @@ public class OpenMeteoMapper {
 
         var daily = LocationAirQualityData.Forecast.builder()
                 .time(dailyDates)
-                .aqi(aggregateDailyInt(dailyDates, aqi.getHourly().getTime(), aqi.getHourly().getUsAqi(), utcOffset))
-                .pm2_5(aggregateDailyDouble(dailyDates, aqi.getHourly().getTime(), aqi.getHourly().getPm2_5(), utcOffset))
-                .pm10(aggregateDailyDouble(dailyDates, aqi.getHourly().getTime(), aqi.getHourly().getPm10(), utcOffset))
-                .o3(aggregateDailyDouble(dailyDates, aqi.getHourly().getTime(), aqi.getHourly().getO3(), utcOffset))
-                .co(aggregateDailyDouble(dailyDates, aqi.getHourly().getTime(), aqi.getHourly().getCo(), utcOffset))
-                .no2(aggregateDailyDouble(dailyDates, aqi.getHourly().getTime(), aqi.getHourly().getNo2(), utcOffset))
-                .so2(aggregateDailyDouble(dailyDates, aqi.getHourly().getTime(), aqi.getHourly().getSo2(), utcOffset))
+                .aqi(aggregateDailyInt(dailyDates, allTimes, aqi.getHourly().getUsAqi(), utcOffset))
+                .pm2_5(aggregateDailyDouble(dailyDates, allTimes, aqi.getHourly().getPm2_5(), utcOffset))
+                .pm10(aggregateDailyDouble(dailyDates, allTimes, aqi.getHourly().getPm10(), utcOffset))
+                .o3(aggregateDailyDouble(dailyDates, allTimes, aqi.getHourly().getO3(), utcOffset))
+                .co(aggregateDailyDouble(dailyDates, allTimes, aqi.getHourly().getCo(), utcOffset))
+                .no2(aggregateDailyDouble(dailyDates, allTimes, aqi.getHourly().getNo2(), utcOffset))
+                .so2(aggregateDailyDouble(dailyDates, allTimes, aqi.getHourly().getSo2(), utcOffset))
                 .build();
 
         return LocationAirQualityHistoryData.builder()
                 .latitude(aqi.getLatitude())
                 .longitude(aqi.getLongitude())
                 .timezone(aqi.getTimezone())
-                .timestamp(Instant.now().getEpochSecond())
+                .timestamp(currentEpoch)
                 .utcOffsetSeconds(utcOffset)
                 .hourly(hourly)
                 .daily(daily)
@@ -227,6 +242,14 @@ public class OpenMeteoMapper {
 
         int dailyLimit = Math.min(response.getDaily().getTime().size(), limit);
         return response.getDaily().getTime().subList(0, dailyLimit);
+    }
+
+    private <T> List<T> sliceList(List<T> list, int start) {
+        if (list == null) return Collections.emptyList();
+        if (start >= list.size()) return Collections.emptyList();
+        if (start <= 0) return list;
+
+        return list.subList(start, list.size());
     }
 
     private String getDayKey(Long timestamp, Integer utcOffsetSeconds) {
