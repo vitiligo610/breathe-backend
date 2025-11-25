@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class TenantController {
     private final TenantService tenantService;
 
-    @GetMapping("/")
+    @GetMapping
     ResponseEntity<TenantDto> getCurrentTenant() {
         TenantDto tenantDto = tenantService.getCurrentTenant();
         return ResponseEntity.ok(tenantDto);
