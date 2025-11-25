@@ -6,6 +6,7 @@ import com.aqi.dto.meteo.WeatherForecastResponse;
 import com.aqi.exception.ExternalApiException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
@@ -28,12 +29,26 @@ public class OpenMeteoClient {
 
     private static final String AQI_PARAMS = "us_aqi,pm10,pm2_5,ozone,carbon_monoxide,nitrogen_dioxide,sulphur_dioxide";
 
+    @Value("${app.open-meteo.summary-forecast-days:3}")
+    private Integer summaryForecastDays;
+
+    @Value("${app.open-meteo.forecast-days:5}")
+    private Integer forecastDays;
+
     public WeatherForecastResponse fetchWeather(Double latitude, Double longitude) {
-        return fetchWeatherInternal(latitude, longitude, null, null);
+        return fetchWeatherInternal(latitude, longitude, true);
+    }
+
+    public WeatherForecastResponse fetchWeatherSummary(Double latitude, Double longitude) {
+        return fetchWeatherInternal(latitude, longitude, false);
     }
 
     public AirQualityResponse fetchAirQuality(Double latitude, Double longitude) {
-        return fetchAirQualityInternal(latitude, longitude, null, null);
+        return fetchAirQualityInternal(latitude, longitude, true);
+    }
+
+    public AirQualityResponse fetchAirQualitySummary(Double latitude, Double longitude) {
+        return fetchAirQualityInternal(latitude, longitude, false);
     }
 
     public ReverseGeocodingResponse fetchLocationName(Double latitude, Double longitude) {
@@ -51,33 +66,50 @@ public class OpenMeteoClient {
         }
     }
 
-    private WeatherForecastResponse fetchWeatherInternal(Double lat, Double lon, Integer forecastDays, Integer pastDays) {
+    private WeatherForecastResponse fetchWeatherInternal(
+            Double latitude,
+            Double longitude,
+            Boolean isDetailedData
+    ) {
         UriComponentsBuilder builder = UriComponentsBuilder.fromUriString(OM_WEATHER_API_URL)
-                .queryParam("latitude", lat)
-                .queryParam("longitude", lon)
+                .queryParam("latitude", latitude)
+                .queryParam("longitude", longitude)
                 .queryParam("current", WEATHER_PARAMS)
-                .queryParam("hourly", WEATHER_PARAMS)
                 .queryParam("daily", WEATHER_PARAMS_DAILY)
                 .queryParam("timezone", "auto")
                 .queryParam("timeformat", "unixtime");
 
-        if (forecastDays != null) builder.queryParam("forecast_days", forecastDays);
-        if (pastDays != null) builder.queryParam("past_days", pastDays);
+        if (isDetailedData) {
+            builder.queryParam("hourly", WEATHER_PARAMS);
+        } else {
+            builder.queryParam("forecast_days", summaryForecastDays);
+        }
+
+//        if (pastDays != null) builder.queryParam("past_days", pastDays);
 
         return executeRequest(builder.toUriString(), WeatherForecastResponse.class);
     }
 
-    private AirQualityResponse fetchAirQualityInternal(Double lat, Double lon, Integer forecastDays, Integer pastDays) {
+    private AirQualityResponse fetchAirQualityInternal(
+            Double latitude,
+            Double longitude,
+            Boolean isDetailedData
+    ) {
         UriComponentsBuilder builder = UriComponentsBuilder.fromUriString(OM_AIR_QUALITY_API_URL)
-                .queryParam("latitude", lat)
-                .queryParam("longitude", lon)
+                .queryParam("latitude", latitude)
+                .queryParam("longitude", longitude)
                 .queryParam("current", AQI_PARAMS)
                 .queryParam("hourly", AQI_PARAMS)
                 .queryParam("timezone", "auto")
                 .queryParam("timeformat", "unixtime");
 
-        if (forecastDays != null) builder.queryParam("forecast_days", forecastDays);
-        if (pastDays != null) builder.queryParam("past_days", pastDays);
+        if (isDetailedData) {
+            builder.queryParam("forecast_days", forecastDays);
+        } else {
+            builder.queryParam("forecast_days", summaryForecastDays);
+        }
+
+//        if (pastDays != null) builder.queryParam("past_days", pastDays);
 
         return executeRequest(builder.toUriString(), AirQualityResponse.class);
     }

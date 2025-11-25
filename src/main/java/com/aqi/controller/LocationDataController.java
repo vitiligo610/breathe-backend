@@ -1,6 +1,7 @@
 package com.aqi.controller;
 
 import com.aqi.dto.location.LocationClimateData;
+import com.aqi.dto.location.LocationClimateSummaryData;
 import com.aqi.service.OpenMeteoService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -18,5 +19,10 @@ public class LocationDataController {
     @GetMapping
     public LocationClimateData getLocationClimateData(@RequestParam Double latitude, @RequestParam Double longitude) {
         return openMeteoService.getLocationClimateData(latitude, longitude);
+    }
+
+    @GetMapping("/summary")
+    public LocationClimateSummaryData getLocationClimateSummaryData(@RequestParam Double latitude, @RequestParam Double longitude) {
+        return openMeteoService.getLocationClimateSummaryData(latitude, longitude);
     }
 }

@@ -6,7 +6,7 @@ import lombok.experimental.SuperBuilder;
 
 @Data
 @SuperBuilder
-public class LocationClimateBase {
+public class LocationClimateBaseData {
     protected String name;
     protected String country;
     protected Double latitude;

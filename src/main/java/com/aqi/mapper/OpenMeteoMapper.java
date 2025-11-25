@@ -3,18 +3,30 @@ package com.aqi.mapper;
 import com.aqi.dto.geocoding.ReverseGeocodingResponse;
 import com.aqi.dto.location.LocationAirQualityData;
 import com.aqi.dto.location.LocationClimateData;
+import com.aqi.dto.location.LocationClimateSummaryData;
 import com.aqi.dto.location.LocationWeatherData;
 import com.aqi.dto.meteo.AirQualityResponse;
 import com.aqi.dto.meteo.WeatherForecastResponse;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
 import java.time.ZoneId;
 import java.util.*;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Component
 public class OpenMeteoMapper {
+
+    @Value("${app.open-meteo.summary-forecast-days:3}")
+    private Integer summaryForecastDays;
+
+    @Value("${app.open-meteo.forecast-days:5}")
+    private Integer forecastDays;
+
+    @Value("${app.open-meteo.past-days:60}")
+    private Integer pastDays;
 
     public LocationClimateData mapToClimateData(WeatherForecastResponse weather, AirQualityResponse aqi, ReverseGeocodingResponse geo) {
 
@@ -53,14 +65,16 @@ public class OpenMeteoMapper {
                 .windDirection(response.getHourly().getWindDirection10m().subList(0, hourlyLimit))
                 .build();
 
+        int dailyLimit = Math.min(response.getCurrent().getTime().length(), forecastDays);
+
         var daily = LocationWeatherData.DailyForecast.builder()
-                .time(response.getDaily().getTime())
-                .temperatureMax(response.getDaily().getTemperature2mMax())
-                .temperatureMin(response.getDaily().getTemperature2mMin())
-                .humidity(response.getDaily().getRelativeHumidity2mMax())
-                .weatherCode(response.getDaily().getWeatherCode())
-                .windSpeed(response.getDaily().getWindSpeed10mMax())
-                .windDirection(response.getDaily().getWindDirection10mDominant())
+                .time(response.getDaily().getTime().subList(0, dailyLimit))
+                .temperatureMax(response.getDaily().getTemperature2mMax().subList(0, dailyLimit))
+                .temperatureMin(response.getDaily().getTemperature2mMin().subList(0, dailyLimit))
+                .humidity(response.getDaily().getRelativeHumidity2mMax().subList(0, dailyLimit))
+                .weatherCode(response.getDaily().getWeatherCode().subList(0, dailyLimit))
+                .windSpeed(response.getDaily().getWindSpeed10mMax().subList(0, dailyLimit))
+                .windDirection(response.getDaily().getWindDirection10mDominant().subList(0, dailyLimit))
                 .build();
 
         return LocationWeatherData.builder()
@@ -96,9 +110,7 @@ public class OpenMeteoMapper {
                 .so2(response.getHourly().getSo2().subList(0, hourlyLimit))
                 .build();
 
-        List<Long> dailyDates = (weather != null && weather.getDaily() != null)
-                ? weather.getDaily().getTime()
-                : Collections.emptyList();
+        List<Long> dailyDates = extractDailyDates(weather, forecastDays);
 
         Integer utcOffset = response.getUtcOffsetSeconds();
 
@@ -121,6 +133,54 @@ public class OpenMeteoMapper {
                 .build();
     }
 
+    public LocationClimateSummaryData mapToLocationClimateSummaryData(WeatherForecastResponse weather, AirQualityResponse aqi, ReverseGeocodingResponse geo) {
+        if (weather == null || aqi == null) return null;
+
+        return LocationClimateSummaryData.builder()
+                .latitude(weather.getLatitude())
+                .longitude(weather.getLongitude())
+                .timezone(weather.getTimezone())
+                .timestamp(Instant.now().getEpochSecond())
+                .utcOffsetSeconds(weather.getUtcOffsetSeconds())
+                .name(geo != null ? geo.getFormattedName() : "Unknown")
+                .country(geo != null ? geo.getCountryName() : null)
+                .current(mapToLocationClimateCurrentData(weather, aqi))
+                .forecast(mapToLocationClimateForecastData(weather, aqi))
+                .build();
+    }
+
+    public LocationClimateSummaryData.CurrentData mapToLocationClimateCurrentData(WeatherForecastResponse weather, AirQualityResponse aqi) {
+        if (weather == null || aqi == null) return null;
+
+        return LocationClimateSummaryData.CurrentData.builder()
+                .temperature(weather.getCurrent().getTemperature2m())
+                .weatherCode(weather.getCurrent().getWeatherCode())
+                .aqi(aqi.getCurrent().getUsAqi())
+                .build();
+    }
+
+    public LocationClimateSummaryData.ForecastData mapToLocationClimateForecastData(WeatherForecastResponse weather, AirQualityResponse aqi) {
+        if (weather == null || aqi == null) return null;
+
+        List<Long> dailyDates = extractDailyDates(weather, summaryForecastDays);
+        Integer utcOffset = weather.getUtcOffsetSeconds();
+
+        return LocationClimateSummaryData.ForecastData.builder()
+                .time(dailyDates)
+                .temperatureMax(weather.getDaily().getTemperature2mMax())
+                .temperatureMin(weather.getDaily().getTemperature2mMin())
+                .weatherCode(weather.getDaily().getWeatherCode())
+                .aqi(aggregateDailyInt(dailyDates, aqi.getHourly().getTime(), aqi.getHourly().getUsAqi(), utcOffset))
+                .build();
+    }
+
+    private List<Long> extractDailyDates(WeatherForecastResponse response, int limit) {
+        if (response == null || response.getDaily() == null) return Collections.emptyList();
+
+        int dailyLimit = Math.min(response.getDaily().getTime().size(), limit);
+        return response.getDaily().getTime().subList(0, dailyLimit);
+    }
+
     private String getDayKey(Long timestamp, Integer utcOffsetSeconds) {
         if (timestamp == null) return "";
         // If offset is null, assume UTC (0)
@@ -132,43 +192,65 @@ public class OpenMeteoMapper {
     }
 
     private List<Double> aggregateDailyDouble(List<Long> targetDailyDates, List<Long> hourlyTimes, List<Double> hourlyValues, Integer utcOffset) {
-        if (targetDailyDates == null || hourlyTimes == null || hourlyValues == null) return Collections.emptyList();
-
-        Map<String, List<Double>> dayToValues = new LinkedHashMap<>();
-
-        for (int i = 0; i < hourlyTimes.size(); i++) {
-            if (i >= hourlyValues.size()) break;
-            // Convert hourly unix timestamp to "YYYY-MM-DD"
-            String day = getDayKey(hourlyTimes.get(i), utcOffset);
-            dayToValues.computeIfAbsent(day, k -> new ArrayList<>()).add(hourlyValues.get(i));
-        }
-
-        return targetDailyDates.stream().map(dateTimestamp -> {
-            // Convert daily target timestamp to "YYYY-MM-DD" to match map keys
-            String targetDay = getDayKey(dateTimestamp, utcOffset);
-            List<Double> values = dayToValues.getOrDefault(targetDay, Collections.emptyList());
-            if (values.isEmpty()) return 0.0;
-            return values.stream().mapToDouble(Double::doubleValue).average().orElse(0.0);
-        }).collect(Collectors.toList());
+        return aggregateDailyGeneric(
+                targetDailyDates,
+                hourlyTimes,
+                hourlyValues,
+                utcOffset,
+                (values) -> {
+                    if (values.isEmpty()) return 0.0;
+                    return values.stream()
+                            .mapToDouble(Double::doubleValue)
+                            .average()
+                            .orElse(0.0);
+                }
+        );
     }
 
     private List<Integer> aggregateDailyInt(List<Long> targetDailyDates, List<Long> hourlyTimes, List<Integer> hourlyValues, Integer utcOffset) {
-        if (targetDailyDates == null || hourlyTimes == null || hourlyValues == null) return Collections.emptyList();
+        return aggregateDailyGeneric(
+                targetDailyDates,
+                hourlyTimes,
+                hourlyValues,
+                utcOffset,
+                (values) -> {
+                    if (values.isEmpty()) return 0;
+                    double avg = values.stream()
+                            .mapToInt(Integer::intValue)
+                            .average()
+                            .orElse(0.0);
+                    return (int) Math.round(avg);
+                }
+        );
+    }
 
-        Map<String, List<Integer>> dayToValues = new LinkedHashMap<>();
+    private <T, R> List<R> aggregateDailyGeneric(
+            List<Long> targetDailyDates,
+            List<Long> hourlyTimes,
+            List<T> hourlyValues,
+            Integer utcOffset,
+            Function<List<T>, R> aggregator
+    ) {
+
+        if (targetDailyDates == null || hourlyTimes == null || hourlyValues == null) {
+            return Collections.emptyList();
+        }
+
+        Map<String, List<T>> dayToValues = new LinkedHashMap<>();
 
         for (int i = 0; i < hourlyTimes.size(); i++) {
             if (i >= hourlyValues.size()) break;
+
             String day = getDayKey(hourlyTimes.get(i), utcOffset);
             dayToValues.computeIfAbsent(day, k -> new ArrayList<>()).add(hourlyValues.get(i));
         }
 
         return targetDailyDates.stream().map(dateTimestamp -> {
             String targetDay = getDayKey(dateTimestamp, utcOffset);
-            List<Integer> values = dayToValues.getOrDefault(targetDay, Collections.emptyList());
-            if (values.isEmpty()) return 0;
-            double avg = values.stream().mapToInt(Integer::intValue).average().orElse(0.0);
-            return (int) Math.round(avg);
+            List<T> values = dayToValues.getOrDefault(targetDay, Collections.emptyList());
+
+            return aggregator.apply(values);
+
         }).collect(Collectors.toList());
     }
 }
