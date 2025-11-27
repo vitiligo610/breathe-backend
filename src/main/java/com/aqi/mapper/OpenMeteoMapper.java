@@ -4,16 +4,20 @@ import com.aqi.dto.geocoding.ReverseGeocodingResponse;
 import com.aqi.dto.location.*;
 import com.aqi.dto.meteo.AirQualityResponse;
 import com.aqi.dto.meteo.WeatherForecastResponse;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
 import java.time.ZoneId;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Component
+@Slf4j
 public class OpenMeteoMapper {
 
     @Value("${app.open-meteo.summary-forecast-days:3}")
@@ -49,17 +53,20 @@ public class OpenMeteoMapper {
                 .build();
 
         int hourlyLimit = Math.min(response.getHourly().getTime().size(), 24);
+        int currentHour = getCurrentHourFromTimestamp(response.getCurrent().getTime(), response.getUtcOffsetSeconds());
+        int startIndex = Math.max(0, currentHour);
+        int endIndex = startIndex + hourlyLimit;
 
         var hourly = LocationWeatherData.HourlyForecast.builder()
-                .time(response.getHourly().getTime().subList(0, hourlyLimit))
-                .temperature(response.getHourly().getTemperature2m().subList(0, hourlyLimit))
-                .humidity(response.getHourly().getRelativeHumidity2m().subList(0, hourlyLimit))
-                .weatherCode(response.getHourly().getWeatherCode().subList(0, hourlyLimit))
-                .windSpeed(response.getHourly().getWindSpeed10m().subList(0, hourlyLimit))
-                .windDirection(response.getHourly().getWindDirection10m().subList(0, hourlyLimit))
+                .time(response.getHourly().getTime().subList(startIndex, endIndex))
+                .temperature(response.getHourly().getTemperature2m().subList(startIndex, endIndex))
+                .humidity(response.getHourly().getRelativeHumidity2m().subList(startIndex, endIndex))
+                .weatherCode(response.getHourly().getWeatherCode().subList(startIndex, endIndex))
+                .windSpeed(response.getHourly().getWindSpeed10m().subList(startIndex, endIndex))
+                .windDirection(response.getHourly().getWindDirection10m().subList(startIndex, endIndex))
                 .build();
 
-        int dailyLimit = Math.min(response.getCurrent().getTime().length(), forecastDays);
+        int dailyLimit = Math.min(response.getDaily().getTime().size(), forecastDays);
 
         var daily = LocationWeatherData.DailyForecast.builder()
                 .time(response.getDaily().getTime().subList(0, dailyLimit))
@@ -92,16 +99,19 @@ public class OpenMeteoMapper {
                 .build();
 
         int hourlyLimit = Math.min(response.getHourly().getTime().size(), 24);
+        int currentHour = getCurrentHourFromTimestamp(response.getCurrent().getTime(), response.getUtcOffsetSeconds());
+        int startIndex = Math.max(0, currentHour);
+        int endIndex = startIndex + hourlyLimit;
 
         var hourly = LocationAirQualityData.Forecast.builder()
-                .time(response.getHourly().getTime().subList(0, hourlyLimit))
-                .aqi(response.getHourly().getUsAqi().subList(0, hourlyLimit))
-                .pm2_5(response.getHourly().getPm2_5().subList(0, hourlyLimit))
-                .pm10(response.getHourly().getPm10().subList(0, hourlyLimit))
-                .o3(response.getHourly().getO3().subList(0, hourlyLimit))
-                .co(response.getHourly().getCo().subList(0, hourlyLimit))
-                .no2(response.getHourly().getNo2().subList(0, hourlyLimit))
-                .so2(response.getHourly().getSo2().subList(0, hourlyLimit))
+                .time(response.getHourly().getTime().subList(startIndex, endIndex))
+                .aqi(response.getHourly().getUsAqi().subList(startIndex, endIndex))
+                .pm2_5(response.getHourly().getPm2_5().subList(startIndex, endIndex))
+                .pm10(response.getHourly().getPm10().subList(startIndex, endIndex))
+                .o3(response.getHourly().getO3().subList(startIndex, endIndex))
+                .co(response.getHourly().getCo().subList(startIndex, endIndex))
+                .no2(response.getHourly().getNo2().subList(startIndex, endIndex))
+                .so2(response.getHourly().getSo2().subList(startIndex, endIndex))
                 .build();
 
         List<Long> dailyDates = extractDailyDates(weather, forecastDays);
@@ -242,6 +252,22 @@ public class OpenMeteoMapper {
 
         int dailyLimit = Math.min(response.getDaily().getTime().size(), limit);
         return response.getDaily().getTime().subList(0, dailyLimit);
+    }
+
+    private int getCurrentHourFromTimestamp(Long timestamp, Integer utcOffsetSeconds) {
+        if (timestamp == null || utcOffsetSeconds == null) {
+            return 0;
+        }
+
+        try {
+            ZoneOffset offset = ZoneOffset.ofTotalSeconds(utcOffsetSeconds);
+            Instant instant = Instant.ofEpochSecond(timestamp);
+            OffsetDateTime offsetDateTime = OffsetDateTime.ofInstant(instant, offset);
+
+            return offsetDateTime.getHour();
+        } catch (Exception e) {
+            return 0;
+        }
     }
 
     private <T> List<T> sliceList(List<T> list, int start) {

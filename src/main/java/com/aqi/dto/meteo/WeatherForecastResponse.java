@@ -29,7 +29,7 @@ public class WeatherForecastResponse extends MeteoApiResponse {
 
     @Data
     public static class CurrentData {
-        private String time;
+        private Long time;
         private Integer interval;
 
         @JsonProperty("temperature_2m")
