@@ -297,6 +297,7 @@ public class OpenMeteoMapper {
                 (values) -> {
                     if (values.isEmpty()) return 0.0;
                     return values.stream()
+                            .filter(Objects::nonNull)
                             .mapToDouble(Double::doubleValue)
                             .average()
                             .orElse(0.0);
@@ -313,6 +314,7 @@ public class OpenMeteoMapper {
                 (values) -> {
                     if (values.isEmpty()) return 0;
                     double avg = values.stream()
+                            .filter(Objects::nonNull)
                             .mapToInt(Integer::intValue)
                             .average()
                             .orElse(0.0);
