@@ -4,12 +4,12 @@ import com.aqi.dto.location.LocationAirQualityHistoryData;
 import com.aqi.dto.location.LocationClimateData;
 import com.aqi.dto.location.LocationClimateSummaryData;
 import com.aqi.dto.location.MapLocationData;
+import com.aqi.dto.report.PollutionReportDto;
+import com.aqi.request.CreateReportRequest;
+import com.aqi.service.CommunityReportService;
 import com.aqi.service.OpenMeteoService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
@@ -19,24 +19,51 @@ import java.util.List;
 public class LocationDataController {
 
     private final OpenMeteoService openMeteoService;
+    private final CommunityReportService communityReportService;
 
     @GetMapping
-    public LocationClimateData getLocationClimateData(@RequestParam Double latitude, @RequestParam Double longitude) {
+    public LocationClimateData getLocationClimateData(
+            @RequestParam Double latitude,
+            @RequestParam Double longitude
+    ) {
         return openMeteoService.getLocationClimateData(latitude, longitude);
     }
 
     @GetMapping("/summary")
-    public LocationClimateSummaryData getLocationClimateSummaryData(@RequestParam Double latitude, @RequestParam Double longitude) {
+    public LocationClimateSummaryData getLocationClimateSummaryData(
+            @RequestParam Double latitude,
+            @RequestParam Double longitude
+    ) {
         return openMeteoService.getLocationClimateSummaryData(latitude, longitude);
     }
 
     @GetMapping("/history")
-    public LocationAirQualityHistoryData getLocationAQHistoryData(@RequestParam Double latitude, @RequestParam Double longitude) {
+    public LocationAirQualityHistoryData getLocationAQHistoryData(
+            @RequestParam Double latitude,
+            @RequestParam Double longitude
+    ) {
         return openMeteoService.getLocationAQHistoryData(latitude, longitude);
     }
 
     @GetMapping("/map")
-    public List<MapLocationData> getMapData(@RequestParam("bounding_box") List<Double> boundingBox, @RequestParam(name = "grid_resolution", defaultValue = "10") Integer gridResolution) {
+    public List<MapLocationData> getMapData(
+            @RequestParam("bounding_box") List<Double> boundingBox,
+            @RequestParam(name = "grid_resolution", defaultValue = "10") Integer gridResolution
+    ) {
         return openMeteoService.getMapLocations(boundingBox, gridResolution);
+    }
+
+    @PostMapping("/report")
+    public PollutionReportDto createReport(
+            @RequestBody CreateReportRequest request
+    ) {
+        return communityReportService.createReport(request);
+    }
+
+    @GetMapping("/reports")
+    public List<PollutionReportDto> getReports(
+            @RequestParam("bounding_box") List<Double> boundingBox
+    ) {
+        return communityReportService.getReportsInBoundingBox(boundingBox);
     }
 }
