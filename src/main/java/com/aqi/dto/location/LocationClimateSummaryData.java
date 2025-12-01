@@ -1,5 +1,6 @@
 package com.aqi.dto.location;
 
+import com.aqi.dto.report.PollutionReportDto;
 import com.aqi.util.ClimateSummaryUnits;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Builder;
@@ -19,6 +20,9 @@ public class LocationClimateSummaryData extends LocationClimateBaseData {
 
     private CurrentData current;
     private ForecastData forecast;
+
+    @JsonProperty("nearby_reports")
+    private List<PollutionReportDto> nearbyReports;
 
     @Data
     @Builder

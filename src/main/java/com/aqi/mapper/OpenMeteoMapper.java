@@ -5,6 +5,8 @@ import com.aqi.dto.location.*;
 import com.aqi.dto.meteo.AirQualityResponse;
 import com.aqi.dto.meteo.WeatherForecastResponse;
 import com.aqi.dto.openaq.ClusterProjection;
+import com.aqi.dto.report.PollutionReportDto;
+import com.aqi.entity.PollutionReport;
 import com.aqi.repository.OpenAqLocationRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -28,7 +30,12 @@ public class OpenMeteoMapper {
     @Value("${app.open-meteo.forecast-days:5}")
     private Integer forecastDays;
 
-    public LocationClimateData mapToClimateData(WeatherForecastResponse weather, AirQualityResponse aqi, ReverseGeocodingResponse geo) {
+    public LocationClimateData mapToClimateData(
+            WeatherForecastResponse weather,
+            AirQualityResponse aqi,
+            ReverseGeocodingResponse geo,
+            List<PollutionReportDto> nearbyReports
+    ) {
 
         return LocationClimateData.builder()
                 .latitude(weather.getLatitude())
@@ -40,6 +47,7 @@ public class OpenMeteoMapper {
                 .country(geo != null ? geo.getCountryName() : null)
                 .weather(mapToWeatherData(weather))
                 .airQuality(mapToAirQualityData(aqi, weather))
+                .nearbyReports(nearbyReports)
                 .build();
     }
 
@@ -139,7 +147,12 @@ public class OpenMeteoMapper {
                 .build();
     }
 
-    public LocationClimateSummaryData mapToLocationClimateSummaryData(WeatherForecastResponse weather, AirQualityResponse aqi, ReverseGeocodingResponse geo) {
+    public LocationClimateSummaryData mapToLocationClimateSummaryData(
+            WeatherForecastResponse weather,
+            AirQualityResponse aqi,
+            ReverseGeocodingResponse geo,
+            List<PollutionReportDto> nearbyReports
+    ) {
         if (weather == null || aqi == null) return null;
 
         return LocationClimateSummaryData.builder()
@@ -152,6 +165,7 @@ public class OpenMeteoMapper {
                 .country(geo != null ? geo.getCountryName() : null)
                 .current(mapToLocationClimateCurrentData(weather, aqi))
                 .forecast(mapToLocationClimateForecastData(weather, aqi))
+                .nearbyReports(nearbyReports)
                 .build();
     }
 
@@ -232,7 +246,11 @@ public class OpenMeteoMapper {
                 .build();
     }
 
-    public List<MapLocationData> mapToMapLocations(AirQualityResponse[] responses, List<ClusterProjection> clusters) {
+    public List<MapLocationData> mapToMapLocations(
+            AirQualityResponse[] responses,
+            List<ClusterProjection> clusters,
+            List<PollutionReportDto> reports
+    ) {
 
         if (responses == null || clusters == null) return Collections.emptyList();
 
@@ -247,12 +265,23 @@ public class OpenMeteoMapper {
             locationList.add(MapLocationData.builder()
                     .latitude(response.getLatitude())
                     .longitude(response.getLongitude())
+                    .pinType("aqi")
                     .aqi(response.getCurrent().getUsAqi())
                     .utcOffsetSeconds(response.getUtcOffsetSeconds())
                     .pointCount(cluster.getPointCount())
                     .isCluster(cluster.getPointCount() > 1)
                     .build());
         }
+
+        reports.forEach(report -> locationList.add(MapLocationData.builder()
+                        .latitude(report.getLatitude())
+                        .longitude(report.getLongitude())
+                        .pinType("report")
+                        .reportId(report.getId())
+                        .reportType(report.getReportType().getDisplayName())
+                        .reportDescription(report.getDescription())
+                        .reportedAt(report.getReportedAt())
+                        .build()));
 
         return locationList;
     }

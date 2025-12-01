@@ -141,6 +141,7 @@ public class OpenMeteoClient {
             builder.queryParam("forecast_days", forecastDays);
         } else if (isPastData) {
             builder.queryParam("past_days", pastDays);
+            builder.queryParam("forecast_days", 0);
         } else {
             builder.queryParam("forecast_days", summaryForecastDays);
         }
