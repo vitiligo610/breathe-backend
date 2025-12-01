@@ -11,7 +11,6 @@ import com.aqi.dto.meteo.WeatherForecastResponse;
 import com.aqi.dto.openaq.ClusterProjection;
 import com.aqi.dto.report.PollutionReportDto;
 import com.aqi.mapper.OpenMeteoMapper;
-import com.aqi.repository.OpenAqLocationRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -122,17 +121,24 @@ public class OpenMeteoService {
         List<ClusterProjection> clusters =
                 openAqService.getClustersInBoundingBox(bbox, gridResolution);
 
+
+
         if (clusters.isEmpty()) {
             return Collections.emptyList();
         }
 
         var responseFuture = fetchAqiForClusters(clusters);
 
+        var reportsFuture = CompletableFuture.supplyAsync(() ->
+                reportService.getReportsInBoundingBox(bbox)
+        );
+
         try {
-            CompletableFuture.allOf(responseFuture).join();
+            CompletableFuture.allOf(responseFuture, reportsFuture).join();
 
             return meteoMapper.mapToMapLocations(
-                    responseFuture.get(), clusters
+                    responseFuture.get(), clusters,
+                    reportsFuture.get()
             );
         } catch (Exception e) {
             log.error("Error during data aggregation", e);
