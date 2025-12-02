@@ -1,6 +1,6 @@
 # --- Stage 1: Build using Maven Wrapper ---
 # We use the JDK image here because we need to compile code
-FROM eclipse-temurin:17-jdk-alpine AS build
+FROM eclipse-temurin:21-jdk-alpine AS build
 WORKDIR /app
 
 # 1. Copy only the wrapper files and pom.xml first
@@ -21,7 +21,7 @@ RUN ./mvnw clean package -DskipTests
 
 # --- Stage 2: Run the Application ---
 # We switch to JRE here to keep the final image small
-FROM eclipse-temurin:17-jre-alpine
+FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 
 # Copy the JAR from the 'build' stage above
