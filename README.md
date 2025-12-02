@@ -1,223 +1,83 @@
-# Secure Mosquitto Broker Setup (mTLS)
+## Breathe - Air Quality Monitoring Backen
 
-This document provides instructions for setting up Mosquitto via Docker with **Mutual TLS (mTLS)** encryption and certificate-based authentication for sensor nodes, while reserving password-based access for the Spring backend.
+The backend service for Breathe, a comprehensive air quality monitoring application. This Spring Boot application aggregates real-time AQI and weather data from Open-Meteo, manages spatial clustering for map visualizations using PostGIS, and handles crowdsourced pollution reports.
 
----
+### Features
 
-## 1. Prerequisites
+- **Real-time Aggregation:** Fetches and merges data from Open-Meteo (Weather & AQI) and BigDataCloud (Reverse Geocoding).
 
-* **Docker** and **Docker Compose** installed.
-* **OpenSSL** installed for certificate generation.
+- **Spatial Clustering:** Utilizes PostGIS to efficiently cluster thousands of sensor points into grid-based markers for map performance.
 
----
+- **Crowdsourced Reporting:** Allows users to report local pollution events (burning, industrial smoke) which are searchable via geospatial radius.
 
-## 2. Directory Structure
+- **Historical & Forecast Data:** Provides 3-day forecasts and 60-day historical data analysis.
 
-Create the following directory structure to manage configuration files and certificates:
+- **Unified Map API:** Returns a unified payload of AQI clusters and community reports for map rendering.
 
+### Tech Stack
+
+- **Language:** Java 17
+
+- **Framework:** Spring Boot 3
+
+- **Database:** PostgreSQL 15 + PostGIS Extension
+
+- **Build Tool:** Maven
+
+- **Containerization:** Docker & Docker Compose
+
+- **External APIs:**
+
+    - [Open-Meteo](https://open-meteo.com/) (Weather & Air Quality)
+
+    - [BigDataCloud](https://www.bigdatacloud.com/) (Reverse Geocoding)
+
+### System Architecture
+
+The system follows a layered architecture separating the Client (API calls), Service (Business Logic), and Repository (Spatial Data) layers.
 ```
-mosquitto-setup/
-├── ca-certificates
-│   ├── ca.crt
-│   └── ca.key
-├── certs
-│   ├── server.crt
-│   └── server.key
-├── config
-│   ├── mosquitto_acl.conf
-│   └── mosquitto.conf
-└── docker-compose.yml
+graph TD
+User[Mobile App / Client] -->|REST API| Controller
+Controller --> Service
 
-````
-
----
-
-## 3. Certificate Generation (CA & Broker)
-
-This process establishes the root of trust (`ca.crt`) and the broker's identity (`server.crt`).
-
-### 3.1. Create CA (Root of Trust)
-
-Generate the Certificate Authority (CA) key and certificate.
-
-```bash
-# Generate CA Private Key (ca.key) and Certificate (ca.crt)
-openssl req -new -x509 -days 365 -extensions v3_ca -keyout ca_certificates/ca.key -out ca_certificates/ca.crt -subj "/CN=MyRootCA"
-````
-
-### 3.2. Create Broker Certificates
-
-Generate the Broker's key pair, CSR, and sign it with the CA.
-
-```bash
-# 1. Generate Broker Private Key
-openssl genrsa -out certs/server.key 2048
-
-# 2. Generate Broker CSR
-# IMPORTANT: Use the Broker's HOSTNAME or IP as the Common Name (CN)
-openssl req -new -out certs/server.csr -key certs/server.key -subj "/CN=localhost"
-
-# 3. Sign the Broker Certificate with the CA
-openssl x509 -req -in certs/server.csr -CA ca_certificates/ca.crt -CAkey ca_certificates/ca.key -CAcreateserial -out certs/server.crt -days 365
+    subgraph Backend
+        Service -->|Geospatial Queries| PostGIS[(PostgreSQL + PostGIS)]
+        Service -->|Fetch Weather/AQI| OpenMeteo[Open-Meteo API]
+        Service -->|Reverse Geocoding| BDC[BigDataCloud API]
+    end
 ```
 
------
+### Getting Started
 
-## 4. Mosquitto Configuration Files
+#### Prerequisites
 
-Place these files in the `./config/` directory.
+- Java 17 SDK
 
-### 4.1. `mosquitto.conf`
+- Docker & Docker Compose (Recommended)
 
-```conf
-# Mosquitto Configuration (./config/mosquitto.conf)
+- OR Maven and a local PostgreSQL instance
 
-# General Settings
-persistence true
-persistence_location /mosquitto/data/
-log_dest stdout
+#### Run with Docker (Recommended)
 
-# Listener for Secure Connections (MQTTS)
-listener 8883
-protocol mqtt
-cafile /mosquitto/config/ca_certificates/ca.crt
-certfile /mosquitto/config/certs/server.crt
-keyfile /mosquitto/config/certs/server.key
-acl_file /mosquitto/config/mosquitto_acl.conf
+The easiest way to run the application and the database is using Docker Compose.
 
-# Security Settings
-allow_anonymous false
-require_certificate true # Enforce mTLS for all connections
-use_identity_as_username true # Use certificate CN as username (for all clients)
+1. **Clone the repository:**
+
+``` bash
+git clone https://github.com/vitiligo610/breathe-backend.git
+cd breathe-backend
 ```
 
-### 4.2. `mosquitto_acl.conf`
+2. **Build the application:**
 
-```conf
-# Mosquitto ACL Configuration (./config/mosquitto_acl.conf)
-
-# 1. Spring Backend User (Uses mTLS/Certificate CN as username)
-user spring_backend_user
-topic readwrite #
-
-# 2. Sensor Node 1 (Uses mTLS/Certificate CN as username)
-user sensor_node_1
-topic write sensors/sensor_node_1/# 
+```
+mvn clean package -DskipTests
 ```
 
------
-
-## 5. Docker Setup and Execution
-
-### 5.1. `docker-compose.yml`
-
-```yaml
-version: '3.7'
-services:
-  mosquitto:
-    image: eclipse-mosquitto:2.0.18
-    container_name: mosquitto-secure
-    ports:
-      - "8883:8883"
-    volumes:
-      - ./config/mosquitto.conf:/mosquitto/config/mosquitto.conf
-      - ./config/mosquitto_acl.conf:/mosquitto/config/mosquitto_acl.conf
-      - ./ca_certificates/ca.crt:/mosquitto/config/ca_certificates/ca.crt
-      - ./certs/server.crt:/mosquitto/config/certs/server.crt
-      - ./certs/server.key:/mosquitto/config/certs/server.key
-    restart: always
+3. **Start the services:**
 ```
-
-### 5.2. Start the Broker
-
-```bash
 docker-compose up -d
 ```
 
------
+4. **Verify:** The API will be available at http://localhost:8080.
 
-## 6. Client Certificate Generation (Backend & Sensor)
-
-### 6.1. Spring Backend Client Certificate
-
-**CN MUST be:** `spring_backend_user`.
-
-```bash
-# 1. Generate Key
-openssl genrsa -out certs/backend_user.key 2048
-# 2. Generate CSR (CN must match ACL entry 'spring_backend_user')
-openssl req -new -out certs/backend_user.csr -key certs/backend_user.key -subj "/CN=spring_backend_user"
-# 3. Sign with CA
-openssl x509 -req -in certs/backend_user.csr -CA ca_certificates/ca.crt -CAkey ca_certificates/ca.key -CAcreateserial -out certs/backend_user.crt -days 365
-```
-
-### 6.2. Sensor Node Client Certificate
-
-Use the **UUID** generated by your Spring Shell command as the **CN**.
-
-```bash
-# Replace <UUID> with the output from your 'add-sensor' shell command
-UUID="<YOUR_GENERATED_UUID_HERE>" 
-
-# 1. Generate Key
-openssl genrsa -out certs/${UUID}.key 2048
-# 2. Generate CSR (CN must match the UUID)
-openssl req -new -out certs/${UUID}.csr -key certs/${UUID}.key -subj "/CN=${UUID}"
-# 3. Sign with CA
-openssl x509 -req -in certs/${UUID}.csr -CA ca_certificates/ca.crt -CAkey ca_certificates/ca.key -CAcreateserial -out certs/${UUID}.crt -days 365
-
-# --- MANUAL ACL UPDATE REQUIRED ---
-echo "user ${UUID}" >> config/mosquitto_acl.conf
-echo "topic write sensors/${UUID}/#" >> config/mosquitto_acl.conf
-# Restart Mosquitto container after updating ACL file.
-docker restart mosquitto-secure
-```
-
------
-
-## 7. Spring Backend Trust & Key Stores
-
-Create the PKCS12 files needed for Java's `KeyManagerFactory` and `TrustManagerFactory`.
-
-### 7.1. Create Key Store (Client Identity)
-
-Bundles the Spring Backend's key and certificate.
-
-```bash
-# Input: backend_user.crt, backend_user.key
-# Output: client-keystore.p12
-openssl pkcs12 -export -in certs/backend_user.crt -inkey certs/backend_user.key \
-    -name "backend-client" -out client-keystore.p12 -passout pass:<key-store-password>
-```
-
-### 7.2. Create Trust Store (Broker Trust)
-
-Bundles the CA certificate to verify the broker's identity.
-
-```bash
-# Input: ca.crt
-# Output: truststore.p12
-keytool -import -trustcacerts -alias ca-root -file ca_certificates/ca.crt \
-    -keystore truststore.p12 -storepass <trust-store-passwrod> -noprompt
-```
-
------
-
-## 8. Environment Variables
-
-### 8.1. `env.properties`
-
-**Create this file** by copying `env.example.properties` and updating paths/passwords. This file should be loaded by your Spring Boot application.
-
-```properties
-DB_URL=postgresql://localhost:5432/aqi_db
-DB_USER=postgres
-DB_PASSWORD=password
-
-MQTT_HOST=localhost
-MQTT_PORT=8883
-MQTT_KEY_STORE_PATH=/path/to/client-keystore.p12
-MQTT_KEY_STORE_PASSWORD=<key-store-password>
-MQTT_TRUST_STORE_PATH=file:/path/to/truststore.p12
-MQTT_TRUST_STORE_PASSWORD=<trust-store-password>
-```
